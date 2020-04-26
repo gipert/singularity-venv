@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+SVENV_DEPOT_PATH=~/.singularity-venv
+
+usage() {
+
+    echo "USAGE: `basename $0` [-v] list|shell [container]" 1>&2;
+    exit 1;
+}
+
+svenv_list() {
+
+    \ls --hide svenv -C ${SVENV_DEPOT_PATH}
+}
+
+svenv_shell() {
+
+    writable=false
+    if [[ "$1" == "--writable" || "$1" == "-w" ]]; then
+        writable=true
+        shift
+    fi
+
+    env="$1"
+    exists=false
+    for e in `\ls --hide svenv --hide='*.env' ${SVENV_DEPOT_PATH}`; do
+        [ "${env}" == "${e}" ] && exists=true && break
+    done
+    ! $exists && echo "ERROR: Singularity environment not found" && exit 1
+
+    env_file=${SVENV_DEPOT_PATH}/${env}.env
+    if $writable; then
+        exec sudo singularity exec --writable ${SVENV_DEPOT_PATH}/${env} \
+            zsh -c "[ -f ${env_file} ] && source ${env_file}; zsh -i"
+    else
+        exec singularity exec ${SVENV_DEPOT_PATH}/${env} \
+            zsh -c "[ -f ${env_file} ] && source ${env_file}; zsh -i"
+    fi
+}
+
+[ ! -z "${SINGULARITY_CONTAINER}" ] \
+    && echo "ERROR: svenv cannot be used inside containers" \
+    && exit 1
+
+if [[ "$1" == "-v" || "$1" == "--verbose" ]]; then
+    set -xv
+    shift
+fi
+
+SVENV_COMMAND="$1"
+shift
+
+[ "$SVENV_COMMAND" == "" ] && usage
+
+if   [ "${SVENV_COMMAND}" = "list" ];  then svenv_list "$@"
+elif [ "${SVENV_COMMAND}" = "shell" ]; then svenv_shell "$@"
+else usage
+fi
+
+set +xv
