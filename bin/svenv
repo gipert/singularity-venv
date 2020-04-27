@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SVENV_DEPOT_PATH=~/.singularity-venv/depot
+SVENV_DEPOT_PATH=${SVENV_DEPOT_PATH:-~/.singularity-venv/depot}
 
 print_log() {
     case "$1" in
@@ -23,7 +23,7 @@ print_log() {
 
 svenv_list() {
 
-    \ls -1 "$SVENV_DEPOT_PATH" | \grep --color=auto -E '(.rootfs|.sif)'
+    \ls -1 "$SVENV_DEPOT_PATH" | \grep --color=auto -E '(.rootfs$|.sif$)'
 }
 
 svenv_shell_usage() {
@@ -160,10 +160,8 @@ svenv_usage() {
     echo "";
     echo "OPTIONS:";
     echo "  -v, --verbose  : debug mode";
-    echo "  -w, --writable : modify the container persistently";
-    echo "  -s, --sandbox  : create writable sandbox";
     echo "";
-    echo "run '`basename $0` ACTION -h|--help' to display specific help sections";
+    echo "run '`basename $0` -- ACTION -h|--help' to display specific help sections";
     exit 1;
 }
 
