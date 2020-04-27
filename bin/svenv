@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+
+SVENV_DEPOT_PATH=~/.singularity-venv/depot
+
+print_log() {
+    case "$1" in
+        "info")
+            shift
+            echo -e "\033[97;1mINFO:\033[0m $@"
+            ;;
+        "warn")
+            shift
+            >&2 echo -e "\033[33mWARNING:\033[0m $@"
+            ;;
+        "err")
+            shift
+            >&2 echo -e "\033[91mERROR:\033[0m $@"
+            ;;
+        *)
+            _log err "unknown logging level $1"
+    esac
+}
+
+svenv_list() {
+
+    \ls -1 "$SVENV_DEPOT_PATH" | \grep --color=auto -E '(.rootfs|.sif)'
+}
+
+svenv_shell_usage() {
+
+    echo "USAGE: `basename $0` shell [OPTIONS] CONTAINER";
+    echo "";
+    echo "OPTIONS:";
+    echo "  -w, --writable : modify the container persistently";
+    exit 1;
+}
+
+svenv_shell() {
+
+    local writable=false
+
+    local options='wh'
+    local longoptions='writable,help'
+    local parsed=$(getopt --name `basename $0` --options $options --longoptions $longoptions -- "$@")
+    [[ $? -eq 0 ]] || exit 1
+    eval set -- "$parsed"
+    while true; do
+        case "$1" in
+            -w | --writable)
+                writable=true
+                shift
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -h | --help | *)
+              svenv_shell_usage
+              ;;
+        esac
+    done
+
+    [[ -z "$1" ]] && svenv_shell_usage
+    local env="$1"
+
+    local exists=false
+    for e in `\ls --hide svenv --hide='*.env' $SVENV_DEPOT_PATH`; do
+        [[ "$env" == "$e" ]] && exists=true && break
+    done
+    ! $exists && print_log err "Singularity environment not found" && exit 1
+
+    if $writable && [[ ! -d "$SVENV_DEPOT_PATH/$env" ]]; then
+        print_log err "cannot open shell in write mode with non-sandbox containers"
+        exit 1
+    fi
+
+    local env_file=$SVENV_DEPOT_PATH/$env.env
+    local flags_file=$SVENV_DEPOT_PATH/$env.flags
+
+    [[ -f "$flags_file" ]] && local more_flags=`cat "$flags_file"`
+
+    if $writable; then
+        exec sudo singularity exec --writable --no-home --contain \
+            $SVENV_DEPOT_PATH/$env \
+            $SHELL -c "[ -f $env_file ] && source $env_file; $SHELL -i"
+    else
+        exec singularity exec $more_flags $SVENV_DEPOT_PATH/$env \
+            $SHELL -c "[ -f $env_file ] && source $env_file; $SHELL -i"
+    fi
+}
+
+svenv_create_usage() {
+
+    echo "USAGE: `basename $0` create [OPTIONS] CONTAINER";
+    echo "";
+    echo "OPTIONS:";
+    echo "  -n, --name string : explicitly set name (w/o extension) for depot";
+    echo "  -s, --sandbox     : create writable sandbox";
+    exit 1;
+}
+
+svenv_create() {
+
+    local store_name=""
+    local sandbox=false
+
+    local options='n:sh'
+    local longoptions='name:,sandbox,help'
+    local parsed=$(getopt --name `basename $0` --options $options --longoptions $longoptions -- "$@")
+    [[ $? -eq 0 ]] || exit 1
+    eval set -- "$parsed"
+    while true; do
+        case "$1" in
+            -n | --name)
+                store_name=$2
+                shift 2
+                ;;
+            -s | --sandbox)
+                sandbox=true
+                shift
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -h | --help | *)
+              svenv_create_usage
+              ;;
+        esac
+    done
+
+    [[ -z "$1" ]] && svenv_create_usage
+    local src="$1"
+
+    [[ ! -a "$src" ]] && print_log err "$src does not exist" && exit 1
+
+    [[ -z "$store_name" ]] &&  store_name=`echo "$src" | sed 's|\..*||g'`
+
+    if $sandbox; then
+        sudo singularity build --sandbox "$SVENV_DEPOT_PATH/${store_name}.rootfs" "$src"
+    else
+        sudo singularity build "$SVENV_DEPOT_PATH/${store_name}.sif" "$src"
+    fi
+
+}
+
+svenv_rm() {
+
+    if [[ ! -a "$SVENV_DEPOT_PATH/$1" ]]; then
+        print_log err "$1 does not exist"
+        exit 1
+    else
+        sudo rm -rf "$SVENV_DEPOT_PATH/$1"
+    fi
+}
+
+svenv_usage() {
+
+    echo "USAGE: `basename $0` [OPTIONS] list|shell|create|rm [OPTIONS] CONTAINER";
+    echo "";
+    echo "OPTIONS:";
+    echo "  -v, --verbose  : debug mode";
+    echo "  -w, --writable : modify the container persistently";
+    echo "  -s, --sandbox  : create writable sandbox";
+    echo "";
+    echo "run '`basename $0` ACTION -h|--help' to display specific help sections";
+    exit 1;
+}
+
+svenv_main() {
+
+    [[ ! -z "$SINGULARITY_CONTAINER" ]] \
+        && print_log err "svenv cannot be used inside containers" \
+        && exit 1
+
+    local options='vh'
+    local longoptions='verbose,help'
+    local parsed=$(getopt --name `basename $0` --options $options --longoptions $longoptions -- "$@")
+    [[ $? -eq 0 ]] || exit 1
+    eval set -- "$parsed"
+    while true; do
+        case "$1" in
+            -v | --verbose)
+                set -xv
+                shift
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -h | --help | *)
+              svenv_usage
+              ;;
+        esac
+    done
+
+    [[ -z "$1" ]] && svenv_usage
+
+    local svenv_command="$1"
+    shift
+
+    mkdir -p "$SVENV_DEPOT_PATH"
+
+    if   [[ "$svenv_command" == "list"   ]]; then svenv_list "$@"
+    elif [[ "$svenv_command" == "shell"  ]]; then svenv_shell "$@"
+    elif [[ "$svenv_command" == "create" ]]; then svenv_create "$@"
+    elif [[ "$svenv_command" == "rm"     ]]; then svenv_rm "$@"
+    else svenv_usage
+    fi
+
+}
+
+svenv_main "$@"
