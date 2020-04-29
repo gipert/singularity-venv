@@ -134,7 +134,7 @@ svenv_create() {
 
     [[ ! -a "$src" ]] && print_log err "$src does not exist" && exit 1
 
-    [[ -z "$store_name" ]] &&  store_name=`echo "$src" | sed 's|\..*||g'`
+    [[ -z "$store_name" ]] &&  store_name=`echo $(basename "$src") | sed 's|\..*||g'`
 
     if $sandbox; then
         sudo singularity build --sandbox "$SVENV_DEPOT_PATH/${store_name}.rootfs" "$src"
