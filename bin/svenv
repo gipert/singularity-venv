@@ -163,7 +163,7 @@ svenv_rm() {
 
 svenv_usage() {
 
-    echo "USAGE: `basename $0` [OPTIONS] list|shell|create|rm [OPTIONS] CONTAINER";
+    echo "USAGE: `basename $0` [OPTIONS] list|exec|shell|create|rm [OPTIONS] CONTAINER";
     echo "";
     echo "OPTIONS:";
     echo "  -v, --verbose  : debug mode";

@@ -18,7 +18,7 @@ $ export PATH="$PATH:$HOME/.singularity-venv/bin"
    The source can be whatever `singularity build` accepts (another image,
    remote link...).  Create a sandbox (writable) container with `create -s`.
 
-2. List the available environments:
+1. List the available environments:
    ```console
    $ senv -- list
    my-env.rootfs
@@ -26,23 +26,28 @@ $ export PATH="$PATH:$HOME/.singularity-venv/bin"
    ```
    The `.rootfs` extension is used to mark writable environments.
 
-3. Spawn a shell inside an environment (read-only mode):
+1. Spawn a shell inside an environment (read-only mode):
    ```console
    $ svenv -- shell my-env.sif
    ```
    or in write mode with `svenv -- shell -w my-env.sif`.
 
-4. Specify custom commands to be executed at startup inside the environment:
+1. Run a a command inside the environment and exit:
+   ```console
+   $ svenv -- exec my-env.sif 'uname -a'
+   ```
+
+1. Specify custom commands to be executed at startup inside the environment:
    ```console
    $ echo "export VAR=value\n; alias root='root -l'" > ~/.singularity-venv/depot/my-app.env
    ```
 
-5. Specify additional additional `singularity build` command line options:
+1. Specify additional additional `singularity build` command line options:
    ```console
    $ echo "--bind /home/user/data:/data" > ~/.singularity-venv/depot/my-app.flags
    ```
 
-6. Consult the help sections `svenv -h` or `svenv -- ACTION -h` for further documentation.
+1. Consult the help sections `svenv -h` or `svenv -- ACTION -h` for further documentation.
 
 ### Customization
 
