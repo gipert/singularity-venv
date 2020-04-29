@@ -26,16 +26,19 @@ svenv_list() {
     \ls -1 "$SVENV_DEPOT_PATH" | \grep --color=auto -E '(.rootfs$|.sif$)'
 }
 
-svenv_shell_usage() {
+svenv_exec_or_shell_usage() {
 
-    echo "USAGE: `basename $0` shell [OPTIONS] CONTAINER";
+    echo "USAGE: `basename $0` shell|exec [OPTIONS] CONTAINER";
     echo "";
     echo "OPTIONS:";
     echo "  -w, --writable : modify the container persistently";
     exit 1;
 }
 
-svenv_shell() {
+svenv_exec_or_shell() {
+
+    local action=$1
+    shift
 
     local writable=false
 
@@ -55,13 +58,14 @@ svenv_shell() {
                 break
                 ;;
             -h | --help | *)
-              svenv_shell_usage
+              svenv_exec_or_shell_usage
               ;;
         esac
     done
 
-    [[ -z "$1" ]] && svenv_shell_usage
+    [[ -z "$1" ]] && svenv_exec_or_shell_usage
     local env="$1"
+    shift
 
     local exists=false
     for e in `\ls --hide svenv --hide='*.env' $SVENV_DEPOT_PATH`; do
@@ -70,22 +74,25 @@ svenv_shell() {
     ! $exists && print_log err "Singularity environment not found" && exit 1
 
     if $writable && [[ ! -d "$SVENV_DEPOT_PATH/$env" ]]; then
-        print_log err "cannot open shell in write mode with non-sandbox containers"
+        print_log err "cannot open shell or exec command in write mode with non-sandbox containers"
         exit 1
     fi
 
     local env_file=$SVENV_DEPOT_PATH/$env.env
     local flags_file=$SVENV_DEPOT_PATH/$env.flags
 
+    [[ "$action" == "shell" ]] && local exec_cmd="$SHELL -i"
+    [[ "$action" == "exec"  ]] && local exec_cmd="$SHELL -c '$@'"
+
     [[ -f "$flags_file" ]] && local more_flags=`cat "$flags_file"`
 
     if $writable; then
         exec sudo singularity exec --writable --no-home --contain \
             $SVENV_DEPOT_PATH/$env \
-            $SHELL -c "[ -f $env_file ] && source $env_file; $SHELL -i"
+            $SHELL -c "[ -f $env_file ] && source $env_file; $exec_cmd"
     else
         exec singularity exec $more_flags $SVENV_DEPOT_PATH/$env \
-            $SHELL -c "[ -f $env_file ] && source $env_file; $SHELL -i"
+            $SHELL -c "[ -f $env_file ] && source $env_file; $exec_cmd"
     fi
 }
 
@@ -200,7 +207,8 @@ svenv_main() {
     mkdir -p "$SVENV_DEPOT_PATH"
 
     if   [[ "$svenv_command" == "list"   ]]; then svenv_list "$@"
-    elif [[ "$svenv_command" == "shell"  ]]; then svenv_shell "$@"
+    elif [[ "$svenv_command" == "shell"  ]]; then svenv_exec_or_shell shell "$@"
+    elif [[ "$svenv_command" == "exec"   ]]; then svenv_exec_or_shell exec "$@"
     elif [[ "$svenv_command" == "create" ]]; then svenv_create "$@"
     elif [[ "$svenv_command" == "rm"     ]]; then svenv_rm "$@"
     else svenv_usage
